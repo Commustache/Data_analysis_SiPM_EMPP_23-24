@@ -16,7 +16,7 @@
 
 #define N_CHANNELS  4096
 
-void MegaIperGaussianFit(TH1I *histogram, const std::vector<std::pair<double, double>>& params, int a, int b, std::vector<double>& centroidi, std::vector<double>& sigma) {
+void MegaIperGaussianFit(TH1I *histogram, const std::vector<std::pair<double, double>>& params, int a, int b, std::vector<double>& centroidi, std::vector<double>& sigma, std::vector<double>& areas) {
     const int paramsPerGaussian = 3;  //Parametri per ogni gaussiana (ampiezza, centroide, sigma) 
     int nGaussians=params.size();    
     
@@ -49,6 +49,7 @@ void MegaIperGaussianFit(TH1I *histogram, const std::vector<std::pair<double, do
     for (int i = 0; i < nGaussians-1; ++i) {
         centroidi.push_back(ffit->GetParameter(i * paramsPerGaussian + 1));
         sigma.push_back(ffit->GetParameter(i * paramsPerGaussian +2));
+        areas.push_back(sqrt(2*M_PI)*ffit->GetParameter(i * paramsPerGaussian)*ffit->GetParameter(i * paramsPerGaussian +2));
     }
 }
 
