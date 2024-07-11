@@ -1,6 +1,7 @@
-//questo codice è in grado di leggere un N file di testo contenenti i dati di uno spettro e di eseguire un multifit gaussiano. 
+//questo codice e' in grado di leggere N file di testo contenenti i dati di uno spettro e di eseguire un multifit gaussiano. 
 //una volta eseguito il fit, il programma restituisce i centroidi e le sigma delle gaussiane fittate, calcola la media delle differenze
 //tra i centroidi e le sigma, ed esegue un fit lineare pesato per trovare la tensione di breakdown del SiPM.
+//il programma e' pensato per funzionare con i dati contenuti nella cartella "ILLUMINAZIONE 6"
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -31,9 +32,11 @@ void MegaIperGaussianFit(TH1I *histogram, const std::vector<std::pair<double, do
 
     //Imposto i parametri iniziali
     for (int i = 0; i < nGaussians; ++i) {
-        ffit->SetParameter(i * paramsPerGaussian, params[i].first);         //Ampiezza
-        ffit->SetParameter(i * paramsPerGaussian + 1, params[i].second);    //Centroide
-        ffit->SetParameter(i * paramsPerGaussian + 2, 29);                  //Sigma; n.b.: 29 è un valore approssimativo che viene fuori da una prima visione dello spettro
+        ffit->SetParameter(i * paramsPerGaussian, params[i].first);                      //Ampiezza
+        ffit->SetParameter(i * paramsPerGaussian + 1, params[i].second);                 //Centroide
+        ffit->SetParameter(i * paramsPerGaussian + 2, 29);                               //Sigma; n.b.: 29 è un valore approssimativo che viene fuori da una prima visione dello spettro
+        ffit->SetParLimits(i * paramsPerGaussian + 2, 1, 100);                           //Limiti per la sigma
+        ffit->SetParLimits(i * paramsPerGaussian, params[i].first, params[i].first+100); //Limiti per l'ampiezza        
         ffit->SetNpx(10000);
     }
     
@@ -70,7 +73,7 @@ std::vector<std::pair<double, double>> findLocalMaxima(const std::vector<double>
             }
         }
 
-        if (isLocalMaxima && y[i]>20) {
+        if (isLocalMaxima && y[i] > 20) {
             localMaxima.push_back(std::make_pair(y[i], x[i]));
             n_max++; 
         }    
@@ -88,7 +91,7 @@ std::pair<double, double> calcolaMediaDifferenze(const std::vector<double>& vett
     std::vector<double> differenze_c;
     std::vector<double> differenze_s;
     for (size_t i = 0; i < vettore1.size() - 1; ++i) {
-        if (vettore2[i]>15 && vettore2[i]<40 && vettore2[i+1]>20 && vettore2[i+1]<40) {
+        if (vettore2[i] > 15 && vettore2[i] < 40 && vettore2[i+1] > 20 && vettore2[i+1] < 40) {
             differenze_c.push_back(fabs(vettore1[i + 1] - vettore1[i]));
             differenze_s.push_back(pow(vettore2[i + 1], 2) + pow(vettore2[i], 2));
             }
@@ -150,10 +153,11 @@ void analisi_sipm_empp_definitivo()
     hspectrum->SetLineColor(kBlue);
     hspectrum->SetFillColor(kBlue);
     hspectrum->SetFillStyle(3002);
+    hspectrum->SetStats(false);
 
     std::vector<std::pair<double, double>> massimiYX;
 
-    //Trova il valore di x a partire dal quale y è maggiore o uguale a 10 (inizio intervallo)
+    //Trova il valore di x a partire dal quale y e' maggiore o uguale a 10 (inizio intervallo)
     size_t startX = 0;
     const int threshold_m = 10;
     for (size_t i = 0; i < y.size(); ++i) {
@@ -164,7 +168,7 @@ void analisi_sipm_empp_definitivo()
     }
     std::cout << "Inizio ricerca massimi da x = " << startX << std::endl;
 
-    //Trova il valore di x a partire dal quale y è minore o uguale a 20 (fine intervallo)
+    //Trova il valore di x a partire dal quale y e' minore o uguale a 20 (fine intervallo)
     size_t endX = N_CHANNELS;
     const int threshold_M = 20;
     for (size_t i = x.size(); i > 0; --i) {
@@ -178,7 +182,7 @@ void analisi_sipm_empp_definitivo()
     //Cerca massimi locali in ogni intervallo e inserisce le coppie nel vettore di pair double "massimiYX"
     massimiYX = findLocalMaxima(x,y);
 
-    //Stampa i risultati del massimo
+    //Stampa i risultati del massimo (per debug)
     std::cout << "Massimi locali trovati:\n";
     for (const auto& maximum : massimiYX) {
         std::cout << "Coordinate (Y, X): (" << maximum.first << ", " << maximum.second << ")\n";
@@ -188,17 +192,17 @@ void analisi_sipm_empp_definitivo()
     std::vector<double> centroidi;
     std::vector<double> sigma;
 
-    //Funzione che esegue il multifit gaussiano che ha bisogno di un istogramma, dei massimi locali, degli estremi di ricerca e di due vettori vuoti da riempire con centroidi e sigma
+    //Funzione che esegue il multifit gaussiano che ha bisogno di un istogramma, del vettore dei massimi locali, degli estremi di ricerca e di due vettori vuoti da riempire con centroidi e sigma
     MegaIperGaussianFit(hspectrum, massimiYX, startX, endX, centroidi, sigma);
 
-    //Stampa nuovi centroidi
+    //Stampa nuovi centroidi (per debug)
     std::cout << "Contenuto del vettore centroidi: \n";
     for (const int& value : centroidi) {
         std::cout << value << "\n";
     }
     std::cout << std::endl;
 
-    //Stampa nuovi sigma
+    //Stampa nuovi sigma (per debug)
     std::cout << "Contenuto del vettore centroidi: \n";
     for (const int& value : sigma) {
         std::cout << value << "\n";
@@ -216,7 +220,7 @@ void analisi_sipm_empp_definitivo()
     double delta_channel[5]={58.5 , 68.4444 , 79.0769 , 90.6429 , 105.615}; //(valori corrispondenti al run 7, 8, 9, 10, 11)
     double v_bias[5]={32, 32.5, 33, 33.5, 34};                              //(valori corrispondenti al run 7, 8, 9, 10, 11)
     double dc_errors[5]={21.1246, 10.3232, 9.67336, 10.8724, 13.199};       //valori ottenuti con la funzione calcolaMediaDifferenze sui sigma
-    double vb_errors[5]={0.1, 0.1, 0.1, 0.1, 0.1};                          //errore di sensibilità 
+    double vb_errors[5]={0.1, 0.1, 0.1, 0.1, 0.1};                          //errore di sensibilita' 
 
 
     //Creo un grafico con errori
@@ -244,6 +248,9 @@ void analisi_sipm_empp_definitivo()
 
     //Disegno il grafico con il fit
     TCanvas *c1 = new TCanvas("c1", "Fit Lineare Pesato", 800, 600);
+    grafico->SetTitle("Fit Lineare");
+    grafico->GetXaxis()->SetTitle("Vbias [V]");
+    grafico->GetYaxis()->SetTitle("Delta Channel [a.u.]");
     grafico->SetMarkerStyle(20);
     grafico->Draw("AP");
     
